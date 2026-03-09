@@ -1721,64 +1721,80 @@ document.addEventListener('keydown', e => {
   if (loggedIn) {
     loadPosts();
     updateStorageInfo();
-    updateOnlineUsers();
-    setInterval(updateOnlineUsers, 30000);
+    initPresence();
   }
 })();
 
 }); // end DOMContentLoaded
 
-  window.updateOnlineUsers = async function() {
+  window.initPresence = function() {
     const onlineEl = document.getElementById("online-users-list");
-    if (!onlineEl) return;
-    try {
-      const since = new Date(Date.now() - 86400000).toISOString();
-      const data = await sb.query("posts", { select: "user_email,user_id", filter: "created_at=gte." + since });
-      const seen = new Set();
-      const users = [];
-      if (data) {
-        data.forEach(function(p) {
-          if (p.user_email && !seen.has(p.user_id)) {
-            seen.add(p.user_id);
-            users.push(p);
-          }
-        });
-      }
+    if (!onlineEl || !currentUser) return;
+
+    const channel = supabase.channel("online-users", {
+      config: { presence: { key: currentUser.id } }
+    });
+
+    function renderOnline(state) {
       onlineEl.innerHTML = "";
-      if (users.length === 0) {
+      const keys = Object.keys(state);
+      if (keys.length === 0) {
         const msg = document.createElement("div");
         msg.style.cssText = "color:var(--muted);font-size:13px";
-        msg.textContent = "Aucun membre actif";
+        msg.textContent = "Aucun membre en ligne";
         onlineEl.appendChild(msg);
-      } else {
-        users.forEach(function(u) {
-          const name = u.user_email.split("@")[0];
-          const initial = name.charAt(0).toUpperCase();
-          const isMe = currentUser && u.user_id === currentUser.id;
-          const row = document.createElement("div");
-          row.style.cssText = "display:flex;align-items:center;gap:10px;padding:6px 0";
-          const dot = document.createElement("div");
-          dot.style.cssText = "width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0";
-          const avatar = document.createElement("div");
-          avatar.style.cssText = "width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#ff9a5c);display:grid;place-items:center;font-size:12px;font-weight:700;flex-shrink:0;color:#fff";
-          avatar.textContent = initial;
-          const label = document.createElement("span");
-          label.style.cssText = "font-size:13px;color:var(--text)";
-          label.textContent = name + (isMe ? " (moi)" : "");
-          row.appendChild(dot);
-          row.appendChild(avatar);
-          row.appendChild(label);
-          onlineEl.appendChild(row);
-        });
+        return;
       }
-    } catch(e) {
-      const msg = document.createElement("div");
-      msg.style.cssText = "color:var(--muted);font-size:13px";
-      msg.textContent = "Indisponible";
-      onlineEl.innerHTML = "";
-      onlineEl.appendChild(msg);
+      keys.forEach(function(key) {
+        const presences = state[key];
+        if (!presences || presences.length === 0) return;
+        const u = presences[0];
+        const name = u.email ? u.email.split("@")[0] : "Anonyme";
+        const initial = name.charAt(0).toUpperCase();
+        const isMe = key === currentUser.id;
+
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;align-items:center;gap:10px;padding:6px 0";
+
+        const dot = document.createElement("div");
+        dot.style.cssText = "width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0";
+
+        const avatar = document.createElement("div");
+        avatar.style.cssText = "width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#ff9a5c);display:grid;place-items:center;font-size:12px;font-weight:700;flex-shrink:0;color:#fff";
+        avatar.textContent = initial;
+
+        const label = document.createElement("span");
+        label.style.cssText = "font-size:13px;color:var(--text)";
+        label.textContent = name + (isMe ? " (moi)" : "");
+
+        row.appendChild(dot);
+        row.appendChild(avatar);
+        row.appendChild(label);
+        onlineEl.appendChild(row);
+      });
     }
+
+    channel
+      .on("presence", { event: "sync" }, function() {
+        renderOnline(channel.presenceState());
+      })
+      .on("presence", { event: "join" }, function() {
+        renderOnline(channel.presenceState());
+      })
+      .on("presence", { event: "leave" }, function() {
+        renderOnline(channel.presenceState());
+      })
+      .subscribe(async function(status) {
+        if (status === "SUBSCRIBED") {
+          await channel.track({
+            email: currentUser.email,
+            online_at: new Date().toISOString()
+          });
+        }
+      });
   };
+
+  window.updateOnlineUsers = async function() {};
 
 </script>
 </body>

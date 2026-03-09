@@ -1727,37 +1727,59 @@ document.addEventListener('keydown', e => {
 })();
 
 }); // end DOMContentLoaded
-</script>
-</body>
+
   window.updateOnlineUsers = async function() {
-    const onlineEl = document.getElementById('online-users-list');
+    const onlineEl = document.getElementById("online-users-list");
     if (!onlineEl) return;
     try {
-      const since = new Date(Date.now() - 24*60*60*1000).toISOString();
-      const data = await sb.query('posts', { select: 'user_email,user_id', filter: 'created_at=gte.' + since });
+      const since = new Date(Date.now() - 86400000).toISOString();
+      const data = await sb.query("posts", { select: "user_email,user_id", filter: "created_at=gte." + since });
       const seen = new Set();
-      const users = (data || []).filter(function(p) {
-        if (!p.user_email || seen.has(p.user_id)) return false;
-        seen.add(p.user_id); return true;
-      });
+      const users = [];
+      if (data) {
+        data.forEach(function(p) {
+          if (p.user_email && !seen.has(p.user_id)) {
+            seen.add(p.user_id);
+            users.push(p);
+          }
+        });
+      }
+      onlineEl.innerHTML = "";
       if (users.length === 0) {
-        onlineEl.innerHTML = '<div style="color:var(--muted);font-size:13px">Aucun membre actif</div>';
+        const msg = document.createElement("div");
+        msg.style.cssText = "color:var(--muted);font-size:13px";
+        msg.textContent = "Aucun membre actif";
+        onlineEl.appendChild(msg);
       } else {
-        let html = '';
         users.forEach(function(u) {
-          const name = u.user_email.split('@')[0];
+          const name = u.user_email.split("@")[0];
           const initial = name.charAt(0).toUpperCase();
           const isMe = currentUser && u.user_id === currentUser.id;
-          html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0">';
-          html += '<div style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0"></div>';
-          html += '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#ff9a5c);display:grid;place-items:center;font-size:12px;font-weight:700;flex-shrink:0">' + initial + '</div>';
-          html += '<span style="font-size:13px;color:var(--text)">' + name + (isMe ? ' (moi)' : '') + '</span>';
-          html += '</div>';
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex;align-items:center;gap:10px;padding:6px 0";
+          const dot = document.createElement("div");
+          dot.style.cssText = "width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0";
+          const avatar = document.createElement("div");
+          avatar.style.cssText = "width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#ff9a5c);display:grid;place-items:center;font-size:12px;font-weight:700;flex-shrink:0;color:#fff";
+          avatar.textContent = initial;
+          const label = document.createElement("span");
+          label.style.cssText = "font-size:13px;color:var(--text)";
+          label.textContent = name + (isMe ? " (moi)" : "");
+          row.appendChild(dot);
+          row.appendChild(avatar);
+          row.appendChild(label);
+          onlineEl.appendChild(row);
         });
-        onlineEl.innerHTML = html;
       }
     } catch(e) {
-      onlineEl.innerHTML = '<div style="color:var(--muted);font-size:13px">Indisponible</div>';
+      const msg = document.createElement("div");
+      msg.style.cssText = "color:var(--muted);font-size:13px";
+      msg.textContent = "Indisponible";
+      onlineEl.innerHTML = "";
+      onlineEl.appendChild(msg);
     }
   };
-</html>
+
+</script>
+</body>
+  </html>
